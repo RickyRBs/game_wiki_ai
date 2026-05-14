@@ -49,13 +49,13 @@ If the user asks a clear question, the app answers directly. If the question is 
 
 ## Run Locally
 
-If you already have the packages installed, you can run:
+For a quick run with packages already installed:
 
 ```bash
 streamlit run app.py
 ```
 
-If you are not familiar with Python projects, use these steps.
+For a more detailed setup, follow these steps.
 
 ### 1. Download the project
 
@@ -129,7 +129,7 @@ Here are a few terms that may be unfamiliar:
 - `venv` or `.venv`: a local Python environment for this project.
 - `localhost`: a web address that runs only on your own computer.
 
-The Hugging Face models may take time to load the first time. If the model packages are not installed or the model cannot load, the app still has backup search methods. This is why the app can still run in a simpler mode.
+The Hugging Face models may take time to load the first time. When the model packages are not installed or the model cannot load, the app still has backup search methods. This is why the app can still run in a simpler mode.
 
 ## Deployment
 
