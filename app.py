@@ -37,9 +37,72 @@ def run_query(question: str, answer_style: str) -> dict:
     return {"question": question.strip(), "answer": answer, "results": results}
 
 
+def needs_clarification(question: str) -> bool:
+    cleaned = question.strip().lower()
+    words = [word for word in cleaned.replace("?", " ").split() if word]
+    vague_phrases = {
+        "help",
+        "strategy",
+        "guide",
+        "tips",
+        "what should i do",
+        "what do i do",
+        "how to play",
+        "stardew",
+        "stardew valley",
+    }
+    return len(words) <= 2 or cleaned in vague_phrases
+
+
+def clarification_options(question: str) -> list[str]:
+    cleaned = question.strip().lower()
+    if "gift" in cleaned or "villager" in cleaned or "friend" in cleaned:
+        return [
+            "What gifts should I give Abigail?",
+            "How do I raise friendship quickly?",
+            "What gifts does Sebastian like?",
+            "Which villagers are easiest to befriend early?",
+        ]
+    if "mine" in cleaned or "cavern" in cleaned or "combat" in cleaned:
+        return [
+            "How do I prepare for Skull Cavern?",
+            "What should I bring to the Mines?",
+            "How do I get more iridium ore?",
+            "When should I upgrade my pickaxe?",
+        ]
+    if "fish" in cleaned:
+        return [
+            "Where can I catch Largemouth Bass?",
+            "How can I make fishing easier?",
+            "Where can I catch Catfish?",
+            "Which fish do I need for bundles?",
+        ]
+    if "crop" in cleaned or "farm" in cleaned or "money" in cleaned:
+        return [
+            "How should I make money in early spring?",
+            "Which summer crops are best for profit?",
+            "When should I upgrade my watering can?",
+            "How should I use the Greenhouse?",
+        ]
+    return [
+        "How should I make money in early spring?",
+        "How do I prepare for Skull Cavern?",
+        "What gifts should I give Abigail?",
+        "What should I do first with the Community Center?",
+    ]
+
+
 data = cached_data()
 engine = cached_engine()
 generator = cached_generator()
+
+UI_STATE_VERSION = 2
+
+if st.session_state.get("ui_state_version") != UI_STATE_VERSION:
+    st.session_state.messages = []
+    st.session_state.clarification_options = []
+    st.session_state.question_input_key = 0
+    st.session_state.ui_state_version = UI_STATE_VERSION
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -54,6 +117,8 @@ else:
     ]
 if "question_input_key" not in st.session_state:
     st.session_state.question_input_key = 0
+if "clarification_options" not in st.session_state:
+    st.session_state.clarification_options = []
 
 st.markdown(
     """
@@ -265,6 +330,39 @@ st.markdown(
     .qa-content {
         padding-top: 0.1rem;
     }
+    .clarify {
+        max-width: 860px;
+        margin: 0 auto 2rem;
+        text-align: left;
+        animation: historyIn 420ms ease-out both;
+    }
+    .clarify-title {
+        color: #a8a8a8;
+        font-size: 0.88rem;
+        margin-bottom: 0.75rem;
+    }
+    .clarify-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.6rem;
+    }
+    .clarify-grid .stButton > button {
+        height: auto;
+        min-height: 3rem;
+        padding: 0.65rem 0.75rem;
+        background: #050505;
+        border: 1px solid #333333;
+        color: #d8d8d8;
+        font-weight: 500;
+        text-align: left;
+        white-space: normal;
+        line-height: 1.35;
+    }
+    .clarify-grid .stButton > button:hover {
+        background: #101010;
+        border-color: #666666;
+        color: #ffffff;
+    }
     @keyframes barIn {
         from {
             opacity: 0;
@@ -294,8 +392,8 @@ st.markdown(
     f"""
     <style>
     .block-container {{
-        padding-top: {"8vh" if st.session_state.messages else "42vh"} !important;
-        padding-bottom: {"3rem" if st.session_state.messages else "7rem"} !important;
+        padding-top: {"8vh" if st.session_state.messages else "28vh" if st.session_state.clarification_options else "42vh"} !important;
+        padding-bottom: {"3rem" if st.session_state.messages or st.session_state.clarification_options else "7rem"} !important;
     }}
     </style>
     """,
@@ -310,12 +408,7 @@ def render_history() -> None:
         label = "Q" if message["role"] == "user" else "A"
         content = html.escape(message["content"]).replace("\n", "<br>")
         chunks.append(
-            f"""
-            <div class="qa-row {role_class}">
-                <div class="qa-avatar">{label}</div>
-                <div class="qa-content">{content}</div>
-            </div>
-            """
+            f'<div class="qa-row {role_class}"><div class="qa-avatar">{label}</div><div class="qa-content">{content}</div></div>'
         )
 
     latest_sources = []
@@ -362,22 +455,50 @@ def render_input_bar() -> tuple[bool, str, str]:
 if st.session_state.messages:
     render_history()
 
+if st.session_state.clarification_options:
+    st.markdown(
+        '<div class="clarify"><div class="clarify-title">Can you make the question more specific?</div></div>',
+        unsafe_allow_html=True,
+    )
+    for row_start in range(0, len(st.session_state.clarification_options), 2):
+        option_cols = st.columns(2)
+        for offset, option in enumerate(st.session_state.clarification_options[row_start : row_start + 2]):
+            with option_cols[offset]:
+                if st.button(option, key=f"clarify_{row_start + offset}", width="stretch"):
+                    st.session_state.messages.append({"role": "user", "content": option, "results": []})
+                    response = run_query(option, "Balanced")
+                    st.session_state.messages.append(
+                        {
+                            "role": "assistant",
+                            "content": response["answer"],
+                            "results": response["results"],
+                        }
+                    )
+                    st.session_state.clarification_options = []
+                    st.session_state.question_input_key += 1
+                    st.rerun()
+
 submitted, question_text, answer_style = render_input_bar()
 
 if submitted and question_text.strip():
-    st.session_state.messages.append({"role": "user", "content": question_text.strip(), "results": []})
-    response = run_query(question_text.strip(), answer_style)
-    st.session_state.messages.append(
-        {
-            "role": "assistant",
-            "content": response["answer"],
-            "results": response["results"],
-        }
-    )
-    st.session_state.question_input_key += 1
+    if needs_clarification(question_text):
+        st.session_state.clarification_options = clarification_options(question_text)
+        st.session_state.question_input_key += 1
+    else:
+        st.session_state.clarification_options = []
+        st.session_state.messages.append({"role": "user", "content": question_text.strip(), "results": []})
+        response = run_query(question_text.strip(), answer_style)
+        st.session_state.messages.append(
+            {
+                "role": "assistant",
+                "content": response["answer"],
+                "results": response["results"],
+            }
+        )
+        st.session_state.question_input_key += 1
     st.rerun()
 
-if not st.session_state.messages:
+if not st.session_state.messages and not st.session_state.clarification_options:
     st.markdown(
         """
         <div class="app-footer">
