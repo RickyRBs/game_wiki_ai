@@ -131,18 +131,6 @@ Here are a few terms that may be unfamiliar:
 
 The Hugging Face models may take time to load the first time. If the model packages are not installed or the model cannot load, the app still has backup search methods. This is why the app can still run in a simpler mode.
 
-## Common Problems
-
-If `streamlit` is not found, make sure the virtual environment is active and run:
-
-```bash
-pip install -r requirements.txt
-```
-
-If the app opens but answers feel too simple, the Hugging Face generation model may not be loaded. The app will still answer from the dataset with the backup answer format.
-
-If deployment is slow, it is usually because Hugging Face and PyTorch packages are large. The first build often takes longer than later runs.
-
 ## Deployment
 
 This repository can be deployed to Streamlit Community Cloud:
