@@ -49,21 +49,99 @@ If the user asks a clear question, the app answers directly. If the question is 
 
 ## Run Locally
 
-Quick run:
+If you already have the packages installed, you can run:
 
 ```bash
 streamlit run app.py
 ```
 
-Full setup:
+If you are not familiar with Python projects, use these steps.
+
+### 1. Download the project
+
+You can download the repository from GitHub, or clone it with:
+
+```bash
+git clone https://github.com/RickyRBs/game_wiki_ai.git
+cd game_wiki_ai
+```
+
+### 2. Create a virtual environment
+
+A virtual environment keeps this project's packages separate from other Python projects on the computer.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+```
+
+After this command, the terminal should show `(.venv)` at the start of the line.
+
+### 3. Install the packages
+
+```bash
 pip install --upgrade pip
 pip install -r requirements.txt
+```
+
+This installs Streamlit, pandas, Hugging Face tools, and the model packages.
+
+### 4. Start the app
+
+```bash
 streamlit run app.py
 ```
+
+Streamlit will print a local address, usually:
+
+```text
+http://localhost:8501
+```
+
+Open that address in a browser. Then type a Stardew Valley question into the center input bar.
+
+### 5. Stop the app
+
+Go back to the terminal and press:
+
+```text
+Control + C
+```
+
+### 6. Leave the virtual environment
+
+When you are done working, run:
+
+```bash
+deactivate
+```
+
+## Beginner Notes
+
+Here are a few terms that may be unfamiliar:
+
+- `README.md`: the main project explanation file.
+- `requirements.txt`: the list of Python packages the app needs.
+- `runtime.txt`: tells Streamlit Cloud which Python version to use.
+- `app.py`: the main Streamlit page.
+- `data/stardew_wiki_seed.csv`: the local wiki dataset.
+- `src/wiki_engine.py`: the search and answer logic.
+- `venv` or `.venv`: a local Python environment for this project.
+- `localhost`: a web address that runs only on your own computer.
+
+The Hugging Face models may take time to load the first time. If the model packages are not installed or the model cannot load, the app still has backup search methods. This is why the app can still run in a simpler mode.
+
+## Common Problems
+
+If `streamlit` is not found, make sure the virtual environment is active and run:
+
+```bash
+pip install -r requirements.txt
+```
+
+If the app opens but answers feel too simple, the Hugging Face generation model may not be loaded. The app will still answer from the dataset with the backup answer format.
+
+If deployment is slow, it is usually because Hugging Face and PyTorch packages are large. The first build often takes longer than later runs.
 
 ## Deployment
 
