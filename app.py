@@ -31,8 +31,8 @@ def cached_generator():
     return get_generator()
 
 
-def run_query(question: str, answer_style: str) -> dict:
-    results = engine.search(question.strip(), category="All", top_k=5)
+def run_query(question: str, answer_style: str, results: list | None = None) -> dict:
+    results = results or engine.search(question.strip(), category="All", top_k=5)
     answer = generator.answer(question.strip(), results, style=answer_style)
     return {"question": question.strip(), "answer": answer, "results": results}
 
@@ -52,6 +52,18 @@ def needs_clarification(question: str) -> bool:
         "stardew valley",
     }
     return len(words) <= 2 or cleaned in vague_phrases
+
+
+def low_confidence(results: list) -> bool:
+    if not results:
+        return True
+    best_score = results[0].score
+    second_score = results[1].score if len(results) > 1 else 0
+    return best_score < 0.22 or (best_score < 0.36 and best_score - second_score < 0.08)
+
+
+def should_offer_clarification(question: str, results: list) -> bool:
+    return needs_clarification(question) or low_confidence(results)
 
 
 def clarification_options(question: str) -> list[str]:
@@ -189,6 +201,12 @@ st.markdown(
         padding-left: 0 !important;
         padding-right: 0 !important;
     }
+    div[data-testid="stVerticalBlock"] {
+        gap: 0.35rem !important;
+    }
+    .element-container {
+        margin-bottom: 0 !important;
+    }
     [data-testid="stChatMessage"] {
         background: transparent;
         border: 0;
@@ -265,10 +283,18 @@ st.markdown(
     .stButton > button {
         border-radius: 0 !important;
         border: 0;
+        background: #050505;
+        color: #d8d8d8;
+        height: 2.35rem;
+        width: 100%;
+        font-weight: 450;
+        font-size: 0.82rem;
+        margin: 0 !important;
+    }
+    .stButton > button[kind="primary"] {
         background: var(--button);
         color: #d8d8d8;
         height: 4.1rem;
-        width: 100%;
         font-weight: 700;
         font-size: 1.02rem;
     }
@@ -332,36 +358,15 @@ st.markdown(
     }
     .clarify {
         max-width: 860px;
-        margin: 0 auto 2rem;
+        margin: 0 auto 1rem;
         text-align: left;
         animation: historyIn 420ms ease-out both;
     }
     .clarify-title {
-        color: #a8a8a8;
-        font-size: 0.88rem;
+        color: #f0f0f0;
+        font-size: 1rem;
+        font-weight: 650;
         margin-bottom: 0.75rem;
-    }
-    .clarify-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.6rem;
-    }
-    .clarify-grid .stButton > button {
-        height: auto;
-        min-height: 3rem;
-        padding: 0.65rem 0.75rem;
-        background: #050505;
-        border: 1px solid #333333;
-        color: #d8d8d8;
-        font-weight: 500;
-        text-align: left;
-        white-space: normal;
-        line-height: 1.35;
-    }
-    .clarify-grid .stButton > button:hover {
-        background: #101010;
-        border-color: #666666;
-        color: #ffffff;
     }
     @keyframes barIn {
         from {
@@ -448,7 +453,7 @@ def render_input_bar() -> tuple[bool, str, str]:
             key=f"question_input_{st.session_state.question_input_key}",
         )
     with button_col:
-        was_submitted = st.button("Ask", width="stretch")
+        was_submitted = st.button("Ask", type="primary", width="stretch")
     return was_submitted, entered_question, selected_style
 
 
@@ -460,34 +465,35 @@ if st.session_state.clarification_options:
         '<div class="clarify"><div class="clarify-title">Can you make the question more specific?</div></div>',
         unsafe_allow_html=True,
     )
-    for row_start in range(0, len(st.session_state.clarification_options), 2):
-        option_cols = st.columns(2)
-        for offset, option in enumerate(st.session_state.clarification_options[row_start : row_start + 2]):
-            with option_cols[offset]:
-                if st.button(option, key=f"clarify_{row_start + offset}", width="stretch"):
-                    st.session_state.messages.append({"role": "user", "content": option, "results": []})
-                    response = run_query(option, "Balanced")
-                    st.session_state.messages.append(
-                        {
-                            "role": "assistant",
-                            "content": response["answer"],
-                            "results": response["results"],
-                        }
-                    )
-                    st.session_state.clarification_options = []
-                    st.session_state.question_input_key += 1
-                    st.rerun()
+    for index, option in enumerate(st.session_state.clarification_options):
+        option_label = f"{index + 1:02d}  /  {option}"
+        st.markdown('<div class="clarify-option">', unsafe_allow_html=True)
+        if st.button(option_label, key=f"clarify_{index}", width="stretch"):
+            st.session_state.messages.append({"role": "user", "content": option, "results": []})
+            response = run_query(option, "Balanced")
+            st.session_state.messages.append(
+                {
+                    "role": "assistant",
+                    "content": response["answer"],
+                    "results": response["results"],
+                }
+            )
+            st.session_state.clarification_options = []
+            st.session_state.question_input_key += 1
+            st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
 submitted, question_text, answer_style = render_input_bar()
 
 if submitted and question_text.strip():
-    if needs_clarification(question_text):
+    candidate_results = engine.search(question_text.strip(), category="All", top_k=5)
+    if should_offer_clarification(question_text, candidate_results):
         st.session_state.clarification_options = clarification_options(question_text)
         st.session_state.question_input_key += 1
     else:
         st.session_state.clarification_options = []
         st.session_state.messages.append({"role": "user", "content": question_text.strip(), "results": []})
-        response = run_query(question_text.strip(), answer_style)
+        response = run_query(question_text.strip(), answer_style, results=candidate_results)
         st.session_state.messages.append(
             {
                 "role": "assistant",
